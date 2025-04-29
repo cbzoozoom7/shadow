@@ -21,10 +21,11 @@ enum EclipseType {
 }
 struct Ray3D {
     let azimuth: Double
-    let altitude: Double
+    let altitude: Double?
 }
 // Below, axis means the shadow cone axis
-struct Eclipse { // https://eclipse.gsfc.nasa.gov/SEcat5/SEcatkey.html
+// https://eclipse.gsfc.nasa.gov/SEcat5/SEcatkey.html
+struct Eclipse: Identifiable {
     let time: Date // TD + ∆t
     let luna: Int
     let saros: Int
@@ -33,15 +34,16 @@ struct Eclipse { // https://eclipse.gsfc.nasa.gov/SEcat5/SEcatkey.html
     let magnitude: Double
     let location: CLLocationCoordinate2D
     let sunPosition: Ray3D
-    let pathWidth: Double?
-    let duration: TimeInterval
-    let catalogNumber: Int
+    let pathWidth: Double? // Kilometers
+    let duration: TimeInterval?
+    let id: Int
     var eclipseCanonPlateNumber: Int { // Can be used to generate a URL to retrive a diagram of the eclipse from NASA
-        return ((catalogNumber - 1) / 20) + 1
+        return ((id - 1) / 20) + 1
     }
+    let t0: Int
     let xCoefficients: [Double]
     let yCoefficients: [Double]
-    let axisDeclinationCoefficients: [Double]
+    let axisDeclinationCoefficients: [Double] // d
     let axisHourAngleCoefficients: [Double] // µ
     let penumbralRadiusCoefficients: [Double] // L1
     let umbralRadiusCoefficients: [Double] // L2

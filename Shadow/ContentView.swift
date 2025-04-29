@@ -7,13 +7,17 @@
 
 import SwiftUI
 import MapKit
-
 struct ContentView: View {
+    @State var selectedEclipse: Eclipse? = nil
+    @State var eclipsePickerShown: Bool = false
+    // async let eclipses: [Eclipse]
     var body: some View {
         Map()
             .mapStyle(.hybrid)
-            .sheet(isPresented: true) {
-                List
+            .sheet(isPresented: $eclipsePickerShown) {
+                List {
+                    
+                }
             }
     }
 }
