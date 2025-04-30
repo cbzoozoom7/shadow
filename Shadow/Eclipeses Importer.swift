@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import MapKit
 import RegexBuilder
 func EclipesesImporter() async throws -> [Eclipse] {
     guard let filepath = Bundle.main.path(forResource: "filtered-eclipses", ofType: "csv") else {
@@ -16,243 +17,104 @@ func EclipesesImporter() async throws -> [Eclipse] {
     lines.removeFirst() // Discard header row
     var eclipeses: [Eclipse] = []
     for line in lines {
-        let nonNegativeDecimalPattern = Regex {
-            ZeroOrMore(.digit)
-            Optionally(".")
-            ZeroOrMore(.digit)
+        var tokens = line.components(separatedBy: ",")
+        for var token in tokens {
+            if let quotedSection = token.firstMatch(of: /"(.*)"/) {
+                token = String(quotedSection.1)
+            }
         }
-        let decimalPattern = Regex {
-            Optionally("-")
-            nonNegativeDecimalPattern
+        var time = {
+            let dateFormatter = DateFormatter()
+            dateFormatter.dateFormat = "yyyy MM dd HH:mm:ss z"
+            return dateFormatter.date(from: "\(tokens[0]) \(tokens[1]) \(tokens[2]) \(tokens[3]) UTC")!
+        }()
+        if let deltaT = Double(tokens[4]) {
+            time.addTimeInterval(deltaT)
         }
-        let csvPattern = Regex {
-            Anchor.startOfLine
-            Capture { // Year
-                OneOrMore(.digit)
-            }
-            ","
-            Capture { // Month
-                OneOrMore(.digit)
-            }
-            ","
-            Capture { // Day
-                OneOrMore(.digit)
-            }
-            ",\""
-            Capture { // Dynamical Time of Greatest Eclipse
-                OneOrMore(.digit)
-                ":"
-                OneOrMore(.digit)
-                ":"
-                OneOrMore(.digit)
-            }
-            "\","
-            Capture { // Delta T
-                decimalPattern
-            }
-            ","
-            Capture { // Luna
-                OneOrMore(.digit)
-            }
-            ","
-            Capture { // Saros
-                OneOrMore(.digit)
-            }
-            ",\""
-            Capture { // Eclipse Type
-                ChoiceOf {
-                    "P"
-                    "A"
-                    "T"
-                    "H"
+        let luna = Int(tokens[5])!
+        let saros = Int(tokens[6])!
+        let type: EclipseType = {
+            switch tokens[7].first {
+            case "P":
+                return .partial
+            case "A":
+                return .annular
+            case "T":
+                return .total
+            case "H":
+                let hybridType: HybridType
+                let index = tokens[7].index(tokens[7].startIndex, offsetBy: 1)
+                switch tokens[7][index] {
+                case "2":
+                    hybridType = .startTotal
+                case "3":
+                    hybridType = .endTotal
+                default:
+                    hybridType = .startEndAnnular
                 }
-                ChoiceOf {
-                    "m"
-                    "n"
-                    "s"
-                    "+"
-                    "-"
-                    "2"
-                    "3"
-                    "b"
-                    "e"
-                }
+                return .hybrid(hybridType)
+            default:
+                fatalError()
             }
-            "\","
-            Capture { // Gamma
-                Optionally("-")
-                ZeroOrMore(.digit)
-                Optionally(".")
-                ZeroOrMore(.digit)
-            }
-            ","
-            Capture { // Magnitude
-                ZeroOrMore(.digit)
-                Optionally(".")
-                ZeroOrMore(.digit)
-            }
-            ",\"" // Latitude
-            ZeroOrMore(.digit)
-            Optionally(".")
-            ZeroOrMore(.digit)
-            ChoiceOf {
-                "N"
-                "S"
-            }
-            "\",\"" // Longitude
-            ZeroOrMore(.digit)
-            Optionally(".")
-            ZeroOrMore(.digit)
-            ChoiceOf {
-                "E"
-                "W"
-            }
-            "\","
-            Capture { // Decimal latitude
-                Optionally("-")
-                ZeroOrMore(.digit)
-                Optionally(".")
-                ZeroOrMore(.digit)
-            }
-            ","
-            Capture { // Decimal longitude
-                Optionally("-")
-                ZeroOrMore(.digit)
-                Optionally(".")
-                ZeroOrMore(.digit)
-            }
-            ","
-            Capture { // Sun altitude
-                ZeroOrMore(.digit)
-                Optionally(".")
-                ZeroOrMore(.digit)
-            }
-            ","
-            Capture { // Sun azimuth
-                ZeroOrMore(.digit)
-                Optionally(".")
-                ZeroOrMore(.digit)
-            }
-            ","
-            Capture { // Path width (km)
-                ZeroOrMore(.digit)
-                Optionally(".")
-                ZeroOrMore(.digit)
-            }
-            ",\"" // Duration
-            Repeat(.digit, count: 2)
-            "m"
-            Repeat(.digit, count: 2)
-            "s\","
-            Capture { // Decimal duration
-                nonNegativeDecimalPattern
-            }
-            ","
-            Capture { // Catalog number
-                nonNegativeDecimalPattern
-            }
-            ","
-            Capture { // Canon Plate number
-                nonNegativeDecimalPattern
-            }
-            ","
-            decimalPattern // Julian date
-            ","
-            Capture { // t0
-                nonNegativeDecimalPattern
-            }
-            ","
-            Capture { // x[0]
-                decimalPattern
-            }
-            ","
-            Capture { // x[1]
-                decimalPattern
-            }
-            ","
-            Capture { // x[2]
-                decimalPattern
-            }
-            ","
-            Capture { // x[3]
-                decimalPattern
-            }
-            ","
-            Capture { // y[0]
-                decimalPattern
-            }
-            ","
-            Capture { // y[1]
-                decimalPattern
-            }
-            ","
-            Capture { // y[2]
-                decimalPattern
-            }
-            ","
-            Capture { // y[3]
-                decimalPattern
-            }
-            ","
-            Capture { // d[0]
-                decimalPattern
-            }
-            ","
-            Capture { // d[1]
-                decimalPattern
-            }
-            ","
-            Capture { // d[2]
-                decimalPattern
-            }
-            ","
-            Capture { // µ[0]
-                decimalPattern
-            }
-            ","
-            Capture { // µ[1]
-                decimalPattern
-            }
-            ","
-            Capture { // µ[2]
-                decimalPattern
-            }
-            ","
-            Capture { // L1[0]
-                nonNegativeDecimalPattern
-            }
-            ","
-            Capture { // L1[1]
-                nonNegativeDecimalPattern
-            }
-            ","
-            Capture { // L1[2]
-                nonNegativeDecimalPattern
-            }
-            ","
-            Capture { // L2[0]
-                nonNegativeDecimalPattern
-            }
-            ","
-            Capture { // L2[1]
-                nonNegativeDecimalPattern
-            }
-            ","
-            Capture { // L2[2]
-                nonNegativeDecimalPattern
-            }
-            ","
-            Capture { // tan(f1)
-                decimalPattern
-            }
-            ","
-            Capture { // tan(f2)
-                decimalPattern
-            }
+        }()
+        let gamma = Double(tokens[8])!
+        let magnitude = Double(tokens[9])!
+        // tokens[10] is latitude
+        // tokens[11] is longitude
+        let latitude = Double(tokens[12])! // tokens[12] is in decimal format unlike 10
+        let longitude = Double(tokens[13])!
+        let sunAltitude: Double?
+        if case .partial = type {
+            sunAltitude = nil
+        } else {
+            sunAltitude = Double(tokens[14])!
         }
-        if let match = line.firstMatch(of: csvPattern) {
-            let (year, month) = match.output
+        let sunAzimuth = Double(tokens[15])!
+        let pathWidth: Double?
+        let duration: Double?
+        if case .partial = type {
+            pathWidth = nil
+            duration = nil
+        } else {
+            pathWidth = Double(tokens[16])!
+            // tokens[17] is duration
+            duration = Double(tokens[18])! // tokens[18] is in decimal format
         }
+        let catalogNumber = Int(tokens[19])!
+        // tokens[20] is canon plate number
+        // tokens[21] is Julian date
+        let t0 = Double(tokens[22])!
+        let x = [Double(tokens[23])!, Double(tokens[24])!, Double(tokens[25])!, Double(tokens[26])!]
+        let y = [Double(tokens[27])!, Double(tokens[28])!, Double(tokens[29])!, Double(tokens[30])!]
+        let declination = [Double(tokens[31])!, Double(tokens[32])!, Double(tokens[33])!]
+        let mu = [Double(tokens[34])!, Double(tokens[35])!, Double(tokens[36])!]
+        let l1 = [Double(tokens[37])!, Double(tokens[38])!, Double(tokens[39])!]
+        let l2 = [Double(tokens[40])!, Double(tokens[41])!, Double(tokens[42])!]
+        let tanF1 = Double(tokens[43])!
+        let tanF2 = Double(tokens[44])!
+        let newEclipse = Eclipse(
+            time: time,
+            luna: luna,
+            saros: saros,
+            type: type,
+            gamma: gamma,
+            magnitude: magnitude,
+            location: CLLocationCoordinate2D(latitude: latitude, longitude: longitude),
+            sunPosition: Ray3D(azimuth: sunAzimuth, altitude: sunAltitude),
+            pathWidth: pathWidth,
+            duration: duration,
+            id: catalogNumber,
+            t0: t0,
+            xCoefficients: x,
+            yCoefficients: y,
+            axisDeclinationCoefficients: declination,
+            axisHourAngleCoefficients: mu,
+            penumbralRadiusCoefficients: l1,
+            umbralRadiusCoefficients: l2,
+            tanPenumbralAxisAngle: tanF1,
+            tanUmbralAxisAngle: tanF2
+            )
+        eclipeses.append(newEclipse)
     }
     return []
 }

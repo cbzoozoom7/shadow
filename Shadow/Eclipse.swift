@@ -8,7 +8,7 @@
 import Foundation
 import MapKit
 
-enum HypridType {
+enum HybridType {
     case startEndAnnular
     case startTotal
     case endTotal
@@ -17,7 +17,7 @@ enum EclipseType {
     case total
     case partial
     case annular
-    case hybrid(HypridType)
+    case hybrid(HybridType)
 }
 struct Ray3D {
     let azimuth: Double
@@ -40,7 +40,7 @@ struct Eclipse: Identifiable {
     var eclipseCanonPlateNumber: Int { // Can be used to generate a URL to retrive a diagram of the eclipse from NASA
         return ((id - 1) / 20) + 1
     }
-    let t0: Int
+    let t0: Double
     let xCoefficients: [Double]
     let yCoefficients: [Double]
     let axisDeclinationCoefficients: [Double] // d
@@ -51,4 +51,4 @@ struct Eclipse: Identifiable {
     let tanPenumbralAxisAngle: Double // tan(f1)
     let tanUmbralAxisAngle: Double // tan(f2)
 }
-let equatorialRadius: UnitLength = UnitLength(symbol: "ER", converter: UnitConverterLinear(coefficient: 6378137))
+let equatorialRadiusx = UnitLength(symbol: "ER", converter: UnitConverterLinear(coefficient: 6378137))
