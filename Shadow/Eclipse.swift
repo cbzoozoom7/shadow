@@ -70,10 +70,18 @@ class EclipseModel: ObservableObject {
     }
     func load() async throws {
         let logger = Logger()
-        guard let filepath = Bundle.main.path(forResource: "test-eclipse", ofType: "csv") else {
+//        guard let filepath = Bundle.main.path(forResource: "test-eclipse", ofType: "csv") else {
+//            return
+//        }
+//        let content = try String(contentsOfFile: filepath, encoding: .ascii)
+        
+        guard let nsData = NSDataAsset(name: "test-eclipse") else {
             return
         }
-        let content = try String(contentsOfFile: filepath, encoding: .ascii)
+        guard let content = String(data: nsData.data, encoding: .ascii) else {
+            return
+        }
+        
         var lines = content.components(separatedBy: "\n")
         logger.notice("lines: \(lines.count)")
         assert(lines.count > 0)
