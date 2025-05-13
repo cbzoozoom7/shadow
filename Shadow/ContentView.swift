@@ -7,28 +7,46 @@
 
 import SwiftUI
 import MapKit
-enum loadingState {
-    case loading
-    case ready
+enum ViewType {
+    case total
+    case annular
+    case partial
+    case none
+}
+struct CalcPoint: Identifiable {
+    var id: ObjectIdentifier
+    let location: CLLocationCoordinate2D
+    let view: ViewType
 }
 struct ContentView: View {
-    @State var selectedEclipse: Eclipse? = nil
     @StateObject var eclipses = EclipseModel()
+    @State var camera: MapCameraPosition = .automatic // Placeholder value
+    @State var mapPoints: [CalcPoint] = []
     var body: some View {
-        ZStack {
-            Map()
-                .mapStyle(.hybrid)
-                .disabled(eclipses.loading)
-            Color.gray
-                .ignoresSafeArea()
-                .opacity(eclipses.loading ? 0.8 : 0)
-                .disabled(!eclipses.loading)
+        if !eclipses.loaded {
             ProgressView()
-                .disabled(!eclipses.loading)
-                .opacity(eclipses.loading ? 1 : 0)
-            Text(String(describing: eclipses.eclipses))
-                .background()
+                .task {
+                    do {
+                        try await eclipses.load()
+                    } catch {
+                        // fail silently. Show loading spinner forever
+                    }
+                }
+        } else {
+            ZStack {
+                Map(position: $camera, bounds: nil, interactionModes: .all) {
+                    Marker("", coordinate: eclipses.selectedEclipse.location)
+                }
+                    .mapStyle(.hybrid)
+                    .edgesIgnoringSafeArea(.top)
+                // TODO: Blur status bar
+            }
+            .onAppear {
+                let mapRegion = MKCoordinateRegion(center: eclipses.selectedEclipse.location, span: .init(latitudeDelta: 15, longitudeDelta: 15))
+                camera = .region(mapRegion)
+            }
         }
+        
     }
 }
 
