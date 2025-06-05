@@ -27,11 +27,18 @@ struct Ray3D {
     let azimuth: Double
     let altitude: Double?
 }
-
 // Below, axis means the shadow cone axis
+struct BesselianCalculation {
+	let time: Date // TD
+	let axisDeclination: Double // d
+	let axisHourAngle: Double // µ
+	let penumbralRadius: Double // L1
+	let umbralRadius: Double // L2
+}
 // https://eclipse.gsfc.nasa.gov/SEcat5/SEcatkey.html
 struct Eclipse: Identifiable {
-    let time: Date // TD + ∆t
+    let time: Date // TD
+	let deltaT: TimeInterval
     let luna: Int
     let saros: Int
     let type: EclipseType
@@ -55,9 +62,67 @@ struct Eclipse: Identifiable {
             // f1 & f2 are measured with respect to lunar shadow
     let tanPenumbralAxisAngle: Double // tan(f1)
     let tanUmbralAxisAngle: Double // tan(f2)
+	lazy var greatestEclipseElements = {
+		return BesselianCalculation(time: self.time,
+									axisDeclination: polynomialCalculation(for: self.axisDeclinationCoefficients),
+									axisHourAngle: polynomialCalculation(for: self.axisHourAngleCoefficients),
+									penumbralRadius: polynomialCalculation(for: self.penumbralRadiusCoefficients),
+									umbralRadius: polynomialCalculation(for: self.umbralRadiusCoefficients))
+	}()
+	private func polynomialCalculation(for coefficients: [Double]) -> Double {
+		var out: Double = 0
+		let components = Calendar.current.dateComponents([.hour, .minute, .second], from: self.time)
+		let t = {
+			var t = Double(components.hour!)
+			t += (Double(components.minute!) / 60.0)
+			t += (Double(components.second!) / 60.0 / 60.0)
+			t -= self.t0
+			return t
+		}()
+		for i in 0 ..< coefficients.count {
+			out += coefficients[i] * pow(t, Double(i))
+		}
+		return out
+	}
 }
-
-class EclipseModel: ObservableObject {
+struct Point3D {
+	let x: Double
+	let y: Double
+	let z: Double
+}
+extension MKCoordinateRegion {
+	func halve() -> [Self] { // Split region in half along its longest dimension
+		let portrait = self.span.latitudeDelta > self.span.longitudeDelta
+		
+		let newDimension = portrait ? self.span.latitudeDelta / 2 : self.span.longitudeDelta / 2
+		
+		let latitudeDelta = portrait ? newDimension : self.span.latitudeDelta
+		let longitudeDelta = portrait ? self.span.longitudeDelta : newDimension
+		let halfSpan = MKCoordinateSpan(latitudeDelta: latitudeDelta, longitudeDelta: longitudeDelta)
+		
+		let centerLatitude = self.center.latitude
+		let centerLongitude = self.center.longitude
+		
+		let quarter = newDimension / 2
+		
+		let regionHalves: [MKCoordinateRegion]
+		if portrait {
+			let newLatitudes = [centerLatitude - quarter, centerLatitude + quarter]
+			regionHalves = newLatitudes.map { lat in
+				let center = CLLocationCoordinate2D(latitude: lat, longitude: centerLongitude)
+				return MKCoordinateRegion(center: center, span: halfSpan)
+			}
+		} else {
+			let newLongitudes = [centerLongitude - quarter, centerLongitude + quarter]
+			regionHalves = newLongitudes.map { lon in
+				let center = CLLocationCoordinate2D(latitude: centerLatitude, longitude: lon)
+				return MKCoordinateRegion(center: center, span: halfSpan)
+			}
+		}
+		return regionHalves
+	}
+}
+class EclipseCanon: ObservableObject {
     @Published var eclipses: [Eclipse]
     @Published var loaded: Bool
     var selection: Int
@@ -76,11 +141,6 @@ class EclipseModel: ObservableObject {
     func load() async throws {
         let logger = Logger()
         var loadedEclipses: [Eclipse] = []
-        //        guard let filepath = Bundle.main.path(forResource: "test-eclipse", ofType: "csv") else {
-        //            return
-        //        }
-        //        let content = try String(contentsOfFile: filepath, encoding: .ascii)
-        
         guard let nsData = NSDataAsset(name: "test-eclipse") else {
             return
         }
@@ -114,13 +174,8 @@ class EclipseModel: ObservableObject {
                 return date
             }()
             
-            if let deltaT = Double(tokens[4]) {
-                logger.debug("tokens[4]: \(tokens[4])\t-> deltaT: \(deltaT)")
-                time.addTimeInterval(deltaT)
-                logger.debug("time: \(time)")
-            } else {
-                logger.debug("tokens[4]: \(tokens[4])\tfailed to parse as Double")
-            }
+            let deltaT = Double(tokens[4]) ?? 0
+			logger.debug("tokens[4]: \(tokens[4])\t-> deltaT: \(deltaT)")
             
             let luna = Int(tokens[5]) ?? 0
             logger.debug("tokens[5]: \(tokens[5])\t-> luna: \(luna)")
@@ -244,6 +299,7 @@ class EclipseModel: ObservableObject {
             
             let newEclipse = Eclipse(
                 time: time,
+				deltaT: deltaT,
                 luna: luna,
                 saros: saros,
                 type: type,
@@ -272,7 +328,31 @@ class EclipseModel: ObservableObject {
             loaded = true
         }
     }
-    
+	func calculateEclipse(for region: MKCoordinateRegion?, visibleArea: MapRegion, queue: DispatchQueue) {
+		// Do nothing if they're null
+		guard let region = region else { return }
+		guard let screen = visibleArea.region else { return }
+		// Do nothing if the center of region is off-screen
+		guard abs(region.center.latitude - screen.center.latitude) < screen.span.latitudeDelta / 2 else { return }
+		guard abs(region.center.longitude - screen.center.longitude) < screen.span.longitudeDelta / 2 else { return }
+		// Split the region in half and queue up a recersion over each
+		let halves = region.halve()
+		halves.forEach { half in
+			queue.async { self.calculateEclipse(for: half, visibleArea: visibleArea, queue: queue) }
+		}
+		// Actual eclipse math
+		let observer = region.center
+		let e2 = 0.0066943799901413 // The square of the Earth's eccentricity
+		let elements = self.eclipses[selection].greatestEclipseElements
+		// The following 2 constants are the legs of a right triangle
+		let geocentricDistanceEquatorialPlane = cos(observer.latitude) / sqrt(1 - e2 * pow(sin(observer.latitude), 2)) // ρcosϕ' Observer's distance from the center of the Earth in the equatorial plane
+		let geocentricDistancePerpendicular = (sin(observer.latitude) * (1 - e2)) / sqrt(1 - e2 * pow(sin(observer.latitude), 2)) // ρsinϕ′ Observer's distance from the center of the Earth perpendicular to the equatorial plane
+		let fundamentalPlaneCoords = Point3D(x: geocentricDistanceEquatorialPlane * sin(observer.longitude - elements.axisHourAngle), // ξ=ρcosϕ′sin(λ−μ)
+											 y: geocentricDistancePerpendicular - <#z#> * cos(elements.axisDeclination) + geocentricDistanceEquatorialPlane * cos(observer.longitude - elements.axisHourAngle) * sin(elements.axisDeclination), // η=ρsinϕ′−zcosd+ρcosϕ′cos(λ−μ)sind
+											 z: <#T##Double#>)
+		
+		
+	}
 }
 
-let equatorialRadiusx = UnitLength(symbol: "ER", converter: UnitConverterLinear(coefficient: 6378137))
+let equatorialRadius = UnitLength(symbol: "ER", converter: UnitConverterLinear(coefficient: 6378137))

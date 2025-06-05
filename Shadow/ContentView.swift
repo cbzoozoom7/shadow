@@ -22,6 +22,8 @@ struct ContentView: View {
     @StateObject var eclipses = EclipseModel()
     @State var camera: MapCameraPosition = .automatic // Placeholder value
     @State var mapPoints: [CalcPoint] = []
+    var mapRegion: MapRegion = MapRegion()
+	let calcQueue = DispatchQueue(label: "page.clist.shadow.calcQueue", attributes: .concurrent)
     var body: some View {
         if !eclipses.loaded {
             ProgressView()
@@ -35,18 +37,42 @@ struct ContentView: View {
         } else {
             ZStack {
                 Map(position: $camera, bounds: nil, interactionModes: .all) {
-                    Marker("", coordinate: eclipses.selectedEclipse.location)
+                    ForEach(mapPoints) { point in
+                        Annotation("", coordinate: point.location) {
+                            let myMapCircle = Circle().opacity(0.5)
+                            switch point.view {
+                            case .total:
+                                myMapCircle.foregroundStyle(.black)
+                            case .partial:
+                                myMapCircle.foregroundStyle(.yellow)
+                            case .annular:
+                                myMapCircle.foregroundStyle(.orange)
+                            case .none:
+                                myMapCircle.foregroundStyle(.white)
+                            }
+                        }
+                    }
+                    Annotation("", coordinate: eclipses.selectedEclipse.location) {
+                        Circle()
+                    }
                 }
-                    .mapStyle(.hybrid)
-                    .edgesIgnoringSafeArea(.top)
-                // TODO: Blur status bar
+                .mapStyle(.hybrid)
+                .onChange(of: camera) {
+					mapRegion.region = camera.region
+					calcQueue.async {
+						eclipses.calculateEclipse(for: mapRegion.region)
+					}
+                }
+                // TODO: Blur under status bar
             }
             .onAppear {
-                let mapRegion = MKCoordinateRegion(center: eclipses.selectedEclipse.location, span: .init(latitudeDelta: 15, longitudeDelta: 15))
-                camera = .region(mapRegion)
+                let eclipseRegion = MKCoordinateRegion(center: eclipses.selectedEclipse.location,
+													   span: .init(latitudeDelta: 15,
+																   longitudeDelta: 15))
+                camera = .region(eclipseRegion)
+                mapRegion.region = eclipseRegion
             }
         }
-        
     }
 }
 

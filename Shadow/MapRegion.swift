@@ -6,8 +6,11 @@
 //
 import MapKit
 class MapRegion {
-var region: MKCoordinateRegion
-    init(region: MKCoordinateRegion) {
-        self.region = region
-    }
+    var region: MKCoordinateRegion?
+//    init() {
+//        
+//    }
+//    init(region: MKCoordinateRegion) {
+//        self.region = region
+//    }
 }
