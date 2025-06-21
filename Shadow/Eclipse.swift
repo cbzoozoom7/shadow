@@ -52,7 +52,7 @@ struct Eclipse: Identifiable {
     var eclipseCanonPlateNumber: Int { // Can be used to generate a URL to retrive a diagram of the eclipse from NASA
         return ((id - 1) / 20) + 1
     }
-    let t0: Double
+    let t0: Date
     let xCoefficients: [Double]
     let yCoefficients: [Double]
     let axisDeclinationCoefficients: [Double] // d
@@ -69,16 +69,12 @@ struct Eclipse: Identifiable {
 									penumbralRadius: polynomialCalculation(for: self.penumbralRadiusCoefficients),
 									umbralRadius: polynomialCalculation(for: self.umbralRadiusCoefficients))
 	}()
+	let tMin: TimeInterval
+	let tMax: TimeInterval
 	private func polynomialCalculation(for coefficients: [Double]) -> Double {
 		var out: Double = 0
-		let components = Calendar.current.dateComponents([.hour, .minute, .second], from: self.time)
-		let t = {
-			var t = Double(components.hour!)
-			t += (Double(components.minute!) / 60.0)
-			t += (Double(components.second!) / 60.0 / 60.0)
-			t -= self.t0
-			return t
-		}()
+		let interval = self.time.timeIntervalSince(self.t0) // t for the time of greatest eclipse, in seconds
+		let t = Double(interval / 60 / 60) // converted to decimal hours
 		for i in 0 ..< coefficients.count {
 			out += coefficients[i] * pow(t, Double(i))
 		}
@@ -166,6 +162,7 @@ class EclipseCanon: ObservableObject {
             
             var time = {
                 let dateFormatter = DateFormatter()
+				dateFormatter.locale = Locale(identifier: "en_US_POSIX")
                 dateFormatter.dateFormat = "yyyy MM dd HH:mm:ss z"
                 let dateString = "\(tokens[0]) \(tokens[1]) \(tokens[2]) \(tokens[3]) UTC"
                 logger.debug("dateString: \(dateString)")
@@ -252,7 +249,12 @@ class EclipseCanon: ObservableObject {
             logger.debug("tokens[19]: \(tokens[19])\t-> catalogNumber: \(catalogNumber)")
             // tokens[20] is canon plate number
             // tokens[21] is Julian date
-            let t0 = Double(tokens[22]) ?? 0
+			let t0 = {
+				let cal = Calendar.current
+				var components = cal.dateComponents([.year, .month, .day], from: time)
+				components.hour = Int(Double(tokens[22]) ?? 0)
+				return cal.date(from: components) ?? Date()
+			} ()
             logger.debug("tokens[22]: \(tokens[22])\t-> t0: \(t0)")
             
             var x: [Double] = []
@@ -296,6 +298,12 @@ class EclipseCanon: ObservableObject {
             
             let tanF2 = Double(tokens[44]) ?? 0
             logger.debug("tokens[44]: \(tokens[44])\t-> tanF2: \(tanF2)")
+			
+			let tMin = (Double(tokens[45]) ?? 0) * 60 * 60 // Convert hours to seconds for use as TimeInterval
+			logger.debug("tokens[45]: \(tokens[45])\t-> tMin: \(tMin)")
+			
+			let tMax = (Double(tokens[46]) ?? 0) * 60 * 60
+			logger.debug("tokens[46]: \(tokens[46])\t-> tMax: \(tMax)")
             
             let newEclipse = Eclipse(
                 time: time,
@@ -318,7 +326,9 @@ class EclipseCanon: ObservableObject {
                 penumbralRadiusCoefficients: l1,
                 umbralRadiusCoefficients: l2,
                 tanPenumbralAxisAngle: tanF1,
-                tanUmbralAxisAngle: tanF2
+                tanUmbralAxisAngle: tanF2,
+				tMin: tMin,
+				tMax: tMax
             )
             loadedEclipses.append(newEclipse)
         }
