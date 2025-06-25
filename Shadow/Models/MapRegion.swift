@@ -5,7 +5,7 @@
 //  Created by Christopher Bowman on 5/13/25.
 //
 import MapKit
-class MapRegion {
+class MapRegion { // Wrapper so I can pass by reference
     var region: MKCoordinateRegion?
 //    init() {
 //        

@@ -19,11 +19,10 @@ struct CalcPoint: Identifiable {
     let view: ViewType
 }
 struct ContentView: View {
-    @StateObject var eclipses = EclipseModel()
+    @StateObject var eclipses = EclipseCanon()
     @State var camera: MapCameraPosition = .automatic // Placeholder value
     @State var mapPoints: [CalcPoint] = []
     var mapRegion: MapRegion = MapRegion()
-	let calcQueue = DispatchQueue(label: "page.clist.shadow.calcQueue", attributes: .concurrent)
     var body: some View {
         if !eclipses.loaded {
             ProgressView()
@@ -59,7 +58,7 @@ struct ContentView: View {
                 .mapStyle(.hybrid)
                 .onChange(of: camera) {
 					mapRegion.region = camera.region
-					calcQueue.async {
+					let calculations = AsyncStream<CalcPoint> { continuation in
 						eclipses.calculateEclipse(for: mapRegion.region)
 					}
                 }

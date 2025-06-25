@@ -338,7 +338,7 @@ class EclipseCanon: ObservableObject {
             loaded = true
         }
     }
-	func calculateEclipse(for region: MKCoordinateRegion?, visibleArea: MapRegion, queue: DispatchQueue) {
+	func calculateEclipse(for region: MKCoordinateRegion?, visibleArea: MapRegion, queue: DispatchQueue) async {
 		// Do nothing if they're null
 		guard let region = region else { return }
 		guard let screen = visibleArea.region else { return }
@@ -348,9 +348,14 @@ class EclipseCanon: ObservableObject {
 		// Split the region in half and queue up a recersion over each
 		let halves = region.halve()
 		halves.forEach { half in
-			queue.async { self.calculateEclipse(for: half, visibleArea: visibleArea, queue: queue) }
+			Task {
+				queue.async { self.calculateEclipse(for: half, visibleArea: visibleArea, queue: queue) }
+
+			}
 		}
 		// Actual eclipse math
+		let ephems = Ephemerides.shared
+		async let moonRange = ephems.getMoonRange(for: self.selectedEclipse.time, eclipse: self.selectedEclipse)
 		let observer = region.center
 		let e2 = 0.0066943799901413 // The square of the Earth's eccentricity
 		let elements = self.eclipses[selection].greatestEclipseElements
