@@ -9,8 +9,8 @@ import Foundation
 import OSLog
 // https://ssd-api.jpl.nasa.gov/doc/horizons.html
 struct NasaHorizons {
-	func getMoonRange(t0: Date, tMin: TimeInterval, tMax: TimeInterval) async -> [Date:Double] {
-		var moonRange: [Date:Double] = [:]
+	func getMoonRange(t0: Date, tMin: TimeInterval, tMax: TimeInterval) async -> [Date:Measurement<UnitLength>] {
+		var moonRange: [Date:Measurement<UnitLength>] = [:]
 		let startTime = t0.addingTimeInterval(tMin)
 		let endTime = t0.addingTimeInterval(tMax)
 		var fmatter = DateFormatter()
@@ -34,7 +34,7 @@ struct NasaHorizons {
 		let logger = Logger()
 		let task = URLSession.shared.dataTask(with: finalUrl) { data, _, _ in
 			logger.info("Data: \(data!)")
-			// TODO
+			// TODO: Store data in the dictionary.
 			
 		}
 		return moonRange

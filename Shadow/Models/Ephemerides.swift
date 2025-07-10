@@ -9,13 +9,13 @@ class Ephemerides { // Singleton
 	private init () {}
 	static let shared = Ephemerides()
 	
-	private var moonRange: [Date: Double] = [:]
+	private var moonRange: [Date: Measurement<UnitLength>] = [:]
 	/// Gets the cached distance to the moon at the specified time, if available. If not, it will make a web request to accquire this data in bulk.
 	/// - Parameters:
 	/// 	- date: The date for which to get the data.
 	/// 	- eclipse: The Eclipse that this lookup is for. The t0, tMin, and tMax values are used in case of a web request.
-	func getMoonRange(for date: Date, eclipse: Eclipse) async -> Double {
-		var range: Double? = nil
+	func getMoonRange(for date: Date, eclipse: Eclipse) async -> Measurement<UnitLength> {
+		var range: Measurement<UnitLength>? = nil
 		let roundedDate = date.roundedToNearest15Minutes
 		range = moonRange[roundedDate]
 		if range == nil {
@@ -43,7 +43,7 @@ extension Date {
 		} else if (minute < 52) || ((minute == 52) && (second < 30)) {
 			components.minute = 45
 		} else {
-			components.minute = 60 // Overflow is handled when converted back to a Date
+			components.minute = 60 // Overflow is handled when converted back to a Date on the next line that runs
 		}
 		return cal.date(from: components)!
 	}
